@@ -15,7 +15,7 @@ logging_client = google.cloud.logging.Client()
 logging_client.setup_logging()
 
 API_VERSION = "0.0.1"
-
+DEFAULT_FAISS_K = 20
 db_general, db_in_depth, voting_roll_df = get_dbs()
 
 # Setup Supabase client
@@ -32,14 +32,16 @@ if not supabase_url or not supabase_key:
 supabase = create_client(supabase_url, supabase_key)
 
 def update_supabase(responses, citations, card_id, processing_time_ms):
+
     transformed_citations = []
-    for citation in citations:
-        transformed_citations.append({
-            "source_title": citation.get("Title"),
-            "source_name": citation.get("Name"),
-            "source_publish_date": citation.get("Published"),
-            "source_url": citation.get("URL")
-        })
+    if citations is not None:
+        for citation in citations:
+            transformed_citations.append({
+                "source_title": citation.get("Title"),
+                "source_name": citation.get("Name"),
+                "source_publish_date": citation.get("Published"),
+                "source_url": citation.get("URL")
+            })
 
     try:
         supabase.table("cards").update(
@@ -92,12 +94,17 @@ def getanswer(request):
         query = parse_field(request_json, "query")
         response_type = parse_field(request_json, "response_type")
         card_id = parse_field(request_json, "card_id")
+        try: # set k if in request.
+            k = parse_field(request_json, "k")
+            print(f"k: {k}")
+        except:
+            k = DEFAULT_FAISS_K
     else:
         raise ValueError("Unknown content type: {}".format(content_type))
 
     logging.info("Request parsed")
 
-    answer = answer_query(query, response_type, voting_roll_df, db_general, db_in_depth)
+    answer = answer_query(query, response_type, voting_roll_df, db_general, db_in_depth, k)
 
     try:
         answer = json.loads(answer)
@@ -106,15 +113,17 @@ def getanswer(request):
         return ("Failed to process answer", 500, headers)
 
     print(f"Answer: {answer}")
-    responses_data = answer.get("responses")
-    
+    responses_data = answer.get('responses')
+    # record k in response object
+    for r in responses_data:
+        r['k'] = k
     print(f"Responses: {responses_data}")
     citations_data = answer.get("citations")
 
     print(f"Citations: {citations_data}")
 
     end = time.time()
-    elapsed = int((end - start) * 1000)
+    elapsed = int(end - start)
     update_supabase(responses_data, citations_data, card_id, elapsed)
     logging.info(f"Completed getanswer in {elapsed} seconds")
     print(f"\n\t--------- Completed getanswer in {elapsed} seconds --------\n")

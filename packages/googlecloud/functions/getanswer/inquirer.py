@@ -240,8 +240,8 @@ def route_question(df, db_general, db_in_depth, query, query_type, k=20):
 
 
 def answer_query(
-    query: str, response_type: str, df: any, db_general: any, db_in_depth: any
+    query: str, response_type: str, df: any, db_general: any, db_in_depth: any, k: int
 ) -> str:
-    final_response = route_question(df, db_general, db_in_depth, query, response_type)
+    final_response = route_question(df, db_general, db_in_depth, query, response_type, k)
 
     return final_response
